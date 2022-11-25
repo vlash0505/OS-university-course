@@ -1,7 +1,3 @@
-// Run() is called from Scheduling.main() and is where
-// the scheduling algorithm written by the user resides.
-// User modification should occur within the Run() function.
-
 import java.util.*;
 import java.io.*;
 
@@ -10,7 +6,7 @@ public class SchedulingAlgorithm {
     private static final String STATE_COMPLETED  = "completed";
     private static final String STATE_IO_BLOCKED = "I/O blocked";
 
-    public static Results run(int runtime, Vector processVector, List<List<Integer>> queueList, Results result) {
+    public static void Run(int runtime, Vector<sProcess> processVector, List<List<Integer>> queueList, Results result) {
         int comptime = 0;
         int currentProcess;
         int size = processVector.size();
@@ -28,7 +24,7 @@ public class SchedulingAlgorithm {
                 List<Integer> currentQueue = queueList.get(currentQueueLevel);
                 for (int i = 0; i < currentQueue.size(); i++) {
                     currentProcess = currentQueue.get(i);
-                    sProcess process = (sProcess) processVector.elementAt(currentProcess);
+                    sProcess process = processVector.elementAt(currentProcess);
                     ProcessLogger.logProcess(out, STATE_REGISTERED, currentProcess, process);
 
                     while (comptime < runtime) {
@@ -41,7 +37,7 @@ public class SchedulingAlgorithm {
                             if (completed == size) {
                                 result.compuTime = comptime;
                                 out.close();
-                                return result;
+                                return;
                             } else {
                                 break;
                             }
@@ -64,7 +60,7 @@ public class SchedulingAlgorithm {
 
                             break;
                         }
-                        process = (sProcess) processVector.elementAt(currentProcess);
+                        process = processVector.elementAt(currentProcess);
                         process.cpudone++;
                         if (process.ioblocking > 0) {
                             process.ionext++;
@@ -82,6 +78,5 @@ public class SchedulingAlgorithm {
             e.printStackTrace();
         }
         result.compuTime = comptime;
-        return result;
     }
 }

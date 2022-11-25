@@ -10,8 +10,9 @@
 import java.io.*;
 import java.util.*;
 
-public class Scheduling {
+import static java.lang.Math.min;
 
+public class Scheduling {
     private static int processnum = 5;
     private static int meanDev = 1000;
     private static int standardDev = 100;
@@ -19,38 +20,46 @@ public class Scheduling {
     private static Vector processVector = new Vector();
     private static Results result = new Results("null", "null", 0);
     private static String resultsFile = "Summary-Results";
+    private static List<List<Integer>> queueList = new ArrayList<>();
+    private static int queuesLimit = 0;
 
-    private static void Init(String file) {
-        File f = new File(file);
+
+    private static void Init(File f) {
         String line;
-        String tmp;
         int cputime = 0;
         int ioblocking = 0;
         double X = 0.0;
 
         try {
-            //BufferedReader in = new BufferedReader(new FileReader(f));
             DataInputStream in = new DataInputStream(new FileInputStream(f));
+            int processId = 0;
+
             while ((line = in.readLine()) != null) {
+                if (line.startsWith("maxqueues")) {
+                    queuesLimit = Utils.parseInteger(line);
+
+                    queueList = new ArrayList<>();
+                    for (int i = 0; i < queuesLimit; i++) {
+                        queueList.add(new ArrayList<>());
+                    }
+                }
                 if (line.startsWith("numprocess")) {
-                    StringTokenizer st = new StringTokenizer(line);
-                    st.nextToken();
-                    processnum = Common.s2i(st.nextToken());
+                    processnum = Utils.parseInteger(line);
                 }
                 if (line.startsWith("meandev")) {
-                    StringTokenizer st = new StringTokenizer(line);
-                    st.nextToken();
-                    meanDev = Common.s2i(st.nextToken());
+                    meanDev = Utils.parseInteger(line);
                 }
                 if (line.startsWith("standdev")) {
-                    StringTokenizer st = new StringTokenizer(line);
-                    st.nextToken();
-                    standardDev = Common.s2i(st.nextToken());
+                    standardDev = Utils.parseInteger(line);
                 }
                 if (line.startsWith("process")) {
                     StringTokenizer st = new StringTokenizer(line);
                     st.nextToken();
                     ioblocking = Common.s2i(st.nextToken());
+                    int level = min(queuesLimit - 1, Common.s2i(st.nextToken()));
+                    if (level < 0) {
+                        level = 0;
+                    }
                     X = Common.R1();
                     while (X == -1.0) {
                         X = Common.R1();
@@ -58,15 +67,16 @@ public class Scheduling {
                     X = X * standardDev;
                     cputime = (int) X + meanDev;
                     processVector.addElement(new sProcess(cputime, ioblocking, 0, 0, 0));
+                    queueList.get(level).add(processId++);
                 }
                 if (line.startsWith("runtime")) {
-                    StringTokenizer st = new StringTokenizer(line);
-                    st.nextToken();
-                    runtime = Common.s2i(st.nextToken());
+                    runtime = Utils.parseInteger(line);
                 }
             }
             in.close();
-        } catch (IOException e) { /* Handle exceptions */ }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private static void debug() {
@@ -86,11 +96,11 @@ public class Scheduling {
     public static void main(String[] args) {
         int i = 0;
 
-        if (args.length != 1) {
-            System.out.println("Usage: 'java Scheduling <INIT FILE>'");
-            System.exit(-1);
-        }
-        File f = new File(args[0]);
+//        if (args.length != 1) {
+//            System.out.println("Usage: 'java Scheduling <INIT FILE>'");
+//            System.exit(-1);
+//        }
+        File f = new File("E:\\Dev\\University\\OS-university-course\\Lab2\\src\\config.cfg");
         if (!(f.exists())) {
             System.out.println("Scheduling: error, file '" + f.getName() + "' does not exist.");
             System.exit(-1);
@@ -100,23 +110,21 @@ public class Scheduling {
             System.exit(-1);
         }
         System.out.println("Working...");
-        Init(args[0]);
+        Init(f);
         if (processVector.size() < processnum) {
             i = 0;
+            int processId = processVector.size();
+            Random random = new Random();
             while (processVector.size() < processnum) {
-                double X = Common.R1();
-                while (X == -1.0) {
-                    X = Common.R1();
-                }
-                X = X * standardDev;
-                int cputime = (int) X + meanDev;
-                processVector.addElement(new sProcess(cputime, i * 100, 0, 0, 0));
+                int cputime = (int) (random.nextDouble() * standardDev + meanDev);
+                int level = random.nextInt(0, queuesLimit);
+                processVector.addElement(new sProcess(cputime, (i + 1) * 100, 0, 0, 0));
+                queueList.get(level).add(processId++);
                 i++;
             }
         }
-        result = SchedulingAlgorithm.Run(runtime, processVector, result);
+        result = SchedulingAlgorithm.run(runtime, processVector, queueList, result);
         try {
-            //BufferedWriter out = new BufferedWriter(new FileWriter(resultsFile));
             PrintStream out = new PrintStream(new FileOutputStream(resultsFile));
             out.println("Scheduling Type: " + result.schedulingType);
             out.println("Scheduling Name: " + result.schedulingName);
@@ -153,7 +161,9 @@ public class Scheduling {
                 out.println(process.numblocked + " times");
             }
             out.close();
-        } catch (IOException e) { /* Handle exceptions */ }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         System.out.println("Completed.");
     }
 }

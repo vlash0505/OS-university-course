@@ -2,68 +2,85 @@
 // the scheduling algorithm written by the user resides.
 // User modification should occur within the Run() function.
 
-import java.util.Vector;
+import java.util.*;
 import java.io.*;
 
 public class SchedulingAlgorithm {
+    private static final String STATE_REGISTERED = "registered";
+    private static final String STATE_COMPLETED  = "completed";
+    private static final String STATE_IO_BLOCKED = "I/O blocked";
 
-    public static Results Run(int runtime, Vector processVector, Results result) {
-        int i = 0;
+    public static Results run(int runtime, Vector processVector, List<List<Integer>> queueList, Results result) {
         int comptime = 0;
-        int currentProcess = 0;
-        int previousProcess = 0;
+        int currentProcess;
         int size = processVector.size();
         int completed = 0;
         String resultsFile = "Summary-Processes";
 
-        result.schedulingType = "Batch (Nonpreemptive)";
-        result.schedulingName = "First-Come First-Served";
+        result.schedulingType = "Interactive";
+        result.schedulingName = "Multiple Queues";
+
         try {
-            //BufferedWriter out = new BufferedWriter(new FileWriter(resultsFile));
-            //OutputStream out = new FileOutputStream(resultsFile);
             PrintStream out = new PrintStream(new FileOutputStream(resultsFile));
-            sProcess process = (sProcess) processVector.elementAt(currentProcess);
-            out.println("Process: " + currentProcess + " registered... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
+            int currentQueueLevel = 0;
+
             while (comptime < runtime) {
-                if (process.cpudone == process.cputime) {
-                    completed++;
-                    out.println("Process: " + currentProcess + " completed... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
-                    if (completed == size) {
-                        result.compuTime = comptime;
-                        out.close();
-                        return result;
-                    }
-                    for (i = size - 1; i >= 0; i--) {
-                        process = (sProcess) processVector.elementAt(i);
-                        if (process.cpudone < process.cputime) {
-                            currentProcess = i;
+                List<Integer> currentQueue = queueList.get(currentQueueLevel);
+                for (int i = 0; i < currentQueue.size(); i++) {
+                    currentProcess = currentQueue.get(i);
+                    sProcess process = (sProcess) processVector.elementAt(currentProcess);
+                    ProcessLogger.logProcess(out, STATE_REGISTERED, currentProcess, process);
+
+                    while (comptime < runtime) {
+                        if (process.cpudone >= process.cputime) {
+                            i--;
+                            completed++;
+                            currentQueue.remove((Object) currentProcess);
+                            ProcessLogger.logProcess(out, STATE_COMPLETED, currentProcess, process);
+
+                            if (completed == size) {
+                                result.compuTime = comptime;
+                                out.close();
+                                return result;
+                            } else {
+                                break;
+                            }
                         }
-                    }
-                    process = (sProcess) processVector.elementAt(currentProcess);
-                    out.println("Process: " + currentProcess + " registered... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
-                }
-                if (process.ioblocking == process.ionext) {
-                    out.println("Process: " + currentProcess + " I/O blocked... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
-                    process.numblocked++;
-                    process.ionext = 0;
-                    previousProcess = currentProcess;
-                    for (i = size - 1; i >= 0; i--) {
-                        process = (sProcess) processVector.elementAt(i);
-                        if (process.cpudone < process.cputime && previousProcess != i) {
-                            currentProcess = i;
+
+                        if (process.ioblocking == process.ionext) {
+                            ProcessLogger.logProcess(out, STATE_IO_BLOCKED, currentProcess, process);
+
+                            process.numblocked++;
+                            process.ionext = 0;
+                            process.ioblocking *= 2;
+                            if (currentQueueLevel != queueList.size() - 1) {
+                                queueList.get(currentQueueLevel + 1).add(currentProcess);
+                                currentQueue.remove((Object) currentProcess);
+                                i--;
+                                if (i < 0) {
+                                    i = 0;
+                                }
+                            }
+
+                            break;
                         }
+                        process = (sProcess) processVector.elementAt(currentProcess);
+                        process.cpudone++;
+                        if (process.ioblocking > 0) {
+                            process.ionext++;
+                        }
+                        comptime++;
                     }
-                    process = (sProcess) processVector.elementAt(currentProcess);
-                    out.println("Process: " + currentProcess + " registered... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
                 }
-                process.cpudone++;
-                if (process.ioblocking > 0) {
-                    process.ionext++;
+                if (comptime >= runtime) {
+                    break;
                 }
-                comptime++;
+                currentQueueLevel = (currentQueueLevel + 1) % queueList.size();
             }
             out.close();
-        } catch (IOException e) { /* Handle exceptions */ }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         result.compuTime = comptime;
         return result;
     }
